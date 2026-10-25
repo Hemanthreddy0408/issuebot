@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "issuebot"
+version = "0.1.0"
+description = "Sandboxed issue-to-PR coding agent with a benchmark"
+requires-python = ">=3.11"
+dependencies = [
+  "pydantic>=2.5",
+  "pydantic-settings>=2.1",
+  "typer>=0.12",
+  "anthropic>=0.40",
+  "docker>=7.0.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-mock>=3", "pytest-asyncio>=0.23", "ruff>=0.4", "mypy>=1.8"]
+
+[project.scripts]
+issuebot = "issuebot.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["examples"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+check_untyped_defs = true
+
+[tool.ruff.lint.per-file-ignores]
+"src/issuebot/cli.py" = ["B008"]

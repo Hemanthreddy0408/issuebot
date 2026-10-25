@@ -1,0 +1,25 @@
+FROM python:3.11-slim
+
+# Prevent bytecode generation and unbuffer stdout/stderr
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/workspace
+
+# Create non-root user and group
+RUN groupadd -g 10001 sandboxgroup && \
+    useradd -u 10001 -g sandboxgroup -s /bin/bash -m sandboxuser
+
+# Install pytest and basic test utilities
+RUN pip install --no-cache-dir pytest==8.3.4
+
+# Set up workspace directory with permissions for non-root user
+WORKDIR /workspace
+RUN chown sandboxuser:sandboxgroup /workspace
+
+# Copy runner script into the image
+COPY sandbox/runner.py /sandbox/runner.py
+RUN chmod 755 /sandbox/runner.py
+
+USER sandboxuser
+
+ENTRYPOINT ["python", "/sandbox/runner.py"]
