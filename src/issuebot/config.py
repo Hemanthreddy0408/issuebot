@@ -12,6 +12,8 @@ class Settings(BaseSettings):
 
     anthropic_api_key: str = ""
     openai_api_key: str = ""
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-2.5-flash"
     strong_model: str = "claude-sonnet-5-5"
     cheap_model: str = "claude-haiku-5-5"
     max_steps: int = 25

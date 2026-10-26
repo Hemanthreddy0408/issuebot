@@ -13,7 +13,9 @@ def test_solve_without_key_exits_cleanly(seed_repo, monkeypatch):
     from issuebot import config
 
     monkeypatch.setenv("ANTHROPIC_API_KEY", "")
+    monkeypatch.setenv("GEMINI_API_KEY", "")
     config.get_settings.cache_clear()
     r = runner.invoke(app, ["solve", "--repo", str(seed_repo), "--issue", "bug"])
     config.get_settings.cache_clear()
     assert r.exit_code == 2
+

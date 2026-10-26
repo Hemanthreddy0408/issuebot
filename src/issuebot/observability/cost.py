@@ -23,7 +23,23 @@ class ModelPrice:
     cache_write: float
 
 
-PRICING: dict[str, ModelPrice] = {}
+PRICING: dict[str, ModelPrice] = {
+    "gemini-2.5-flash": ModelPrice(
+        input=0.075, output=0.30, cache_read=0.01875, cache_write=0.075
+    ),
+    "gemini-2.0-flash": ModelPrice(
+        input=0.10, output=0.40, cache_read=0.025, cache_write=0.10
+    ),
+    "gemini-1.5-flash": ModelPrice(
+        input=0.075, output=0.30, cache_read=0.01875, cache_write=0.075
+    ),
+    "gemini-2.5-pro": ModelPrice(
+        input=1.25, output=5.00, cache_read=0.3125, cache_write=1.25
+    ),
+    "gemini-1.5-pro": ModelPrice(
+        input=1.25, output=5.00, cache_read=0.3125, cache_write=1.25
+    ),
+}
 _warned: set[str] = set()
 
 

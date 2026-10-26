@@ -45,13 +45,13 @@ def solve(
     if not issue:
         typer.echo("Provide --issue or --issue-file.", err=True)
         raise typer.Exit(2)
-    if not settings.anthropic_api_key:
-        typer.echo("ANTHROPIC_API_KEY is not set (see .env.example).", err=True)
-        raise typer.Exit(2)
+    from issuebot.llm import create_llm_client
 
-    from issuebot.llm.anthropic_client import AnthropicClient
-
-    llm = AnthropicClient(model or settings.strong_model, settings.anthropic_api_key)
+    try:
+        llm = create_llm_client(model, settings)
+    except ValueError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(2) from e
     task = Task(
         task_id=repo.resolve().name,
         repo_path=repo,
@@ -147,12 +147,13 @@ def benchmark_run(
         llm = MockLLMClient()
         typer.echo("[dry-run] Using MockLLMClient (no API calls)")
     else:
-        if not settings.anthropic_api_key:
-            typer.echo("ANTHROPIC_API_KEY is not set (see .env.example).", err=True)
-            raise typer.Exit(2)
-        from issuebot.llm.anthropic_client import AnthropicClient
+        from issuebot.llm import create_llm_client
 
-        llm = AnthropicClient(model or settings.strong_model, settings.anthropic_api_key)
+        try:
+            llm = create_llm_client(model, settings)
+        except ValueError as e:
+            typer.echo(str(e), err=True)
+            raise typer.Exit(2) from e
 
     results = run_benchmark(tasks, llm, runs_dir=out_dir / "traces", verbose=verbose)
 

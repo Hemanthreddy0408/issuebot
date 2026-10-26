@@ -9,6 +9,9 @@ SECRET_PATTERNS = [
     re.compile(r"sk-ant-[a-zA-Z0-9_\-]{20,}", re.IGNORECASE),
     # OpenAI API keys (sk-proj-..., sk-...)
     re.compile(r"sk-(?:proj-)?[a-zA-Z0-9_\-]{20,}", re.IGNORECASE),
+    # Google / Gemini API keys (AIza..., AQ....)
+    re.compile(r"\bAIza[0-9A-Za-z\-_]{35}\b"),
+    re.compile(r"\bAQ\.[a-zA-Z0-9_\-]{30,}\b"),
     # GitHub personal access tokens, app tokens, OAuth tokens
     re.compile(r"gh[pousr]_[A-Za-z0-9_]{36,}", re.IGNORECASE),
     re.compile(r"github_pat_[A-Za-z0-9_]{60,}", re.IGNORECASE),
