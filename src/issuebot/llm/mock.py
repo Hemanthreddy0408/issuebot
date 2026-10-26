@@ -42,3 +42,22 @@ class ScriptedLLM:
         if not self.turns:
             raise AssertionError("ScriptedLLM ran out of scripted turns")
         return self.turns.pop(0)
+
+
+class MockLLMClient:
+    """Minimal LLM stub for --dry-run benchmark mode.
+
+    Always calls ``finish`` immediately on the first turn, producing a
+    ``failed_tests`` result (no real patch). This lets the benchmark CLI
+    smoke-test the full pipeline without any API calls or real test runs.
+    """
+
+    model = "mock-model"
+
+    def complete(
+        self, system: str, messages: list[dict[str, Any]], tools: list[dict[str, Any]]
+    ) -> LLMResponse:
+        return make_response(
+            "Dry-run: immediately calling finish.",
+            ("finish", {"summary": "dry-run finish"}),
+        )

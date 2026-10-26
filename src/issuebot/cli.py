@@ -13,6 +13,10 @@ from issuebot.observability.tracing import Tracer
 
 app = typer.Typer(help="IssueBot: a sandboxed issue-to-PR coding agent.", no_args_is_help=True)
 
+# Benchmark sub-app
+benchmark_app = typer.Typer(help="Run and report on the IssueBot benchmark suite.")
+app.add_typer(benchmark_app, name="benchmark")
+
 
 @app.command()
 def version() -> None:
@@ -80,5 +84,142 @@ def solve(
     raise typer.Exit(0 if result.status == RunStatus.SOLVED else 1)
 
 
+# ─── Benchmark commands ───────────────────────────────────────────────────────
+
+
+@benchmark_app.command("run")
+def benchmark_run(
+    examples_dir: Path = typer.Option(
+        Path("examples"),
+        "--examples-dir",
+        exists=True,
+        file_okay=False,
+        help="Directory containing seed repo sub-dirs",
+    ),
+    task_ids: list[str] = typer.Option(
+        [],
+        "--task",
+        help="Run only these task IDs (repeat for multiple); default: all",
+    ),
+    model: str | None = typer.Option(None, "--model", help="Override STRONG_MODEL"),
+    max_steps: int = typer.Option(25, "--max-steps"),
+    max_cost_usd: float = typer.Option(0.50, "--max-cost-usd"),
+    out_dir: Path = typer.Option(Path("runs/benchmark"), "--out-dir"),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Use scripted mock LLM (no API calls, for CI smoke tests)",
+    ),
+    validate: bool = typer.Option(
+        True,
+        "--validate/--no-validate",
+        help="Apply patches and re-run tests for ground-truth validation",
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+) -> None:
+    """Run the agent on every seed repo and produce a benchmark report."""
+    logging.basicConfig(level=logging.INFO if verbose else logging.WARNING)
+    settings = get_settings()
+
+    from issuebot.benchmark.loader import load_tasks
+    from issuebot.benchmark.reporter import build_metrics, build_report, write_jsonl, write_report
+    from issuebot.benchmark.runner import run_benchmark
+    from issuebot.benchmark.validator import validate_all
+    from issuebot.llm.base import LLMClient
+
+    tasks = load_tasks(
+        examples_dir,
+        task_ids=list(task_ids) or None,
+        max_steps=max_steps,
+        max_cost_usd=max_cost_usd,
+        max_wall_seconds=settings.max_wall_seconds,
+    )
+    if not tasks:
+        typer.echo("No tasks found. Check --examples-dir.", err=True)
+        raise typer.Exit(2)
+
+    typer.echo(f"Found {len(tasks)} tasks: {[t.task_id for t in tasks]}")
+
+    llm: LLMClient
+    if dry_run:
+        from issuebot.llm.mock import MockLLMClient
+
+        llm = MockLLMClient()
+        typer.echo("[dry-run] Using MockLLMClient (no API calls)")
+    else:
+        if not settings.anthropic_api_key:
+            typer.echo("ANTHROPIC_API_KEY is not set (see .env.example).", err=True)
+            raise typer.Exit(2)
+        from issuebot.llm.anthropic_client import AnthropicClient
+
+        llm = AnthropicClient(model or settings.strong_model, settings.anthropic_api_key)
+
+    results = run_benchmark(tasks, llm, runs_dir=out_dir / "traces", verbose=verbose)
+
+    validations = validate_all(tasks, results) if validate else []
+
+    metrics = build_metrics(results, validations)
+    metrics_path = out_dir / "metrics.jsonl"
+    write_jsonl(metrics, metrics_path)
+    typer.echo(f"\nMetrics written to {metrics_path}")
+
+    report = build_report(results, validations, model=llm.model)
+    report_path = out_dir / "report.md"
+    write_report(report, report_path)
+    typer.echo(f"Report written to {report_path}")
+
+    typer.echo("\n" + report)
+
+    n_genuine = sum(1 for v in validations if v.is_genuine_fix)
+    n_total = len(results)
+    raise typer.Exit(0 if n_genuine == n_total else 1)
+
+
+@benchmark_app.command("report")
+def benchmark_report(
+    metrics_file: Path = typer.Argument(
+        ..., exists=True, help="Path to a metrics.jsonl file from a previous run"
+    ),
+    out: Path | None = typer.Option(None, "--out", help="Write Markdown report here"),
+) -> None:
+    """Re-generate a Markdown report from an existing metrics.jsonl file."""
+    import json as _json
+
+    from issuebot.benchmark.reporter import build_report, write_report
+    from issuebot.models import RunResult, RunStatus
+
+    rows = [_json.loads(line) for line in metrics_file.read_text().splitlines() if line.strip()]
+
+    # Reconstruct minimal RunResult objects from metrics rows
+    results: list[RunResult] = []
+    for row in rows:
+        results.append(
+            RunResult(
+                run_id=row.get("run_id", row["task_id"]),
+                task_id=row["task_id"],
+                status=RunStatus(row["agent_status"]),
+                patch=None,
+                steps=[],
+                total_input_tokens=row.get("input_tokens", 0),
+                total_output_tokens=row.get("output_tokens", 0),
+                total_cost_usd=row.get("cost_usd", 0.0),
+                wall_seconds=row.get("wall_seconds", 0.0),
+                model_config_name=row.get("model", "unknown"),
+                explanation=row.get("explanation"),
+                hidden_tests_passed=row.get("hidden_tests_passed"),
+            )
+        )
+
+    model = rows[0].get("model", "unknown") if rows else "unknown"
+    report = build_report(results, [], model=model)
+
+    if out:
+        write_report(report, out)
+        typer.echo(f"Report written to {out}")
+    else:
+        typer.echo(report)
+
+
 if __name__ == "__main__":
     app()
+
